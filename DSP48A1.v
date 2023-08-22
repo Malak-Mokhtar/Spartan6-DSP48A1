@@ -120,6 +120,7 @@ reg [47:0] Z_mux;
 
 wire op3_cout;
 wire [47:0] op3_out;
+wire [47:0] P_mux;
 
 // ---------------------------- CODE ----------------------------  //
 
@@ -129,25 +130,25 @@ assign B_BCIN_mux = (B_INPUT == "DIRECT") ? B : (B_INPUT == "CASCADE") ? BCIN : 
 
 // ------- Level 1 FFs ------- //
 // -- Data ports -- //
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(DREG),.WIDTH(18)) D_REG (.rst(RSTD),.clk(CLK),.en(CED),.in(D),.out(D_mux));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(B0REG),.WIDTH(18)) B0_REG (.rst(RSTB),.clk(CLK),.en(CEB),.in(B_BCIN_mux),.out(B0_mux));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(A0REG),.WIDTH(18)) A0_REG (.rst(RSTA),.clk(CLK),.en(CEA),.in(A),.out(A0_mux));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(CREG),.WIDTH(48)) C_REG (.rst(RSTC),.clk(CLK),.en(CEC),.in(C),.out(C_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(18)) D_REG (.rst(RSTD),.clk(CLK),.en(CED),.num_reg(DREG),.in(D),.out(D_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(18)) B0_REG (.rst(RSTB),.clk(CLK),.en(CEB),.num_reg(B0REG),.in(B_BCIN_mux),.out(B0_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(18)) A0_REG (.rst(RSTA),.clk(CLK),.en(CEA),.num_reg(A0REG),.in(A),.out(A0_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(48)) C_REG (.rst(RSTC),.clk(CLK),.en(CEC),.num_reg(CREG),.in(C),.out(C_mux));
 
 // -- Control ports -- //
 // opmode input has a register and mux pair in the design entry:
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(OPMODEREG),.WIDTH(8)) OPMODE_REG (.rst(RSTOPMODE),.clk(CLK),.en(CEOPMODE),.in(OPMODE),.out(opmode_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(8)) OPMODE_REG (.rst(RSTOPMODE),.clk(CLK),.en(CEOPMODE),.num_reg(OPMODEREG),.in(OPMODE),.out(opmode_mux));
 
 
 // ------- Combinational logic ------- //
 // Pre-Adder/Subtracter
 assign op1_out = opmode_mux[6] ? (D_mux-B0_mux) : (D_mux+B0_mux);
-assign op1_mux = opmode_mux[4] ? B0_mux : op1_out;
+assign op1_mux = opmode_mux[4] ? op1_out : B0_mux;
 
 
 // ------- Level 2 FFs ------- //
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(B1REG),.WIDTH(18)) B1_REG (.rst(RSTB),.clk(CLK),.en(CEB),.in(op1_mux),.out(B1_mux));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(A1REG),.WIDTH(18)) A1_REG (.rst(RSTA),.clk(CLK),.en(CEA),.in(A0_mux),.out(A1_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(18)) B1_REG (.rst(RSTB),.clk(CLK),.en(CEB),.num_reg(B1REG),.in(op1_mux),.out(B1_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(18)) A1_REG (.rst(RSTA),.clk(CLK),.en(CEA),.num_reg(A1REG),.in(A0_mux),.out(A1_mux));
 
 
 // ------- Combinational logic ------- //
@@ -158,25 +159,25 @@ assign Carry_mux = (CARRYINSEL == "OPMODE5") ? opmode_mux[5] : CARRYIN; //
 
 
 // ------- Level 3 FFs ------- //
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(MREG),.WIDTH(36)) M_REG (.rst(RSTM),.clk(CLK),.en(CEM),.in(op2_out),.out(M_mux));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(CARRYINREG),.WIDTH(1)) CYI_REG (.rst(RSTCARRYIN),.clk(CLK),.en(CECARRYIN),.in(Carry_mux),.out(CYI_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(36)) M_REG (.rst(RSTM),.clk(CLK),.en(CEM),.num_reg(MREG),.in(op2_out),.out(M_mux));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(1)) CYI_REG (.rst(RSTCARRYIN),.clk(CLK),.en(CECARRYIN),.num_reg(CARRYINREG),.in(Carry_mux),.out(CYI_mux));
 
 
 // ------- Combinational logic ------- //
 always @(*) begin
     // X mux
     case (opmode_mux[1:0])
-       2'b00 : X_mux = {D[11:0],A,B};
-       2'b01 : X_mux = P;
-       2'b10 : X_mux = M_mux;
-       default: X_mux = 0;
+       2'b00 : X_mux = 0;
+       2'b01 : X_mux = M_mux;
+       2'b10 : X_mux = P_mux;
+       default: X_mux = {D_mux[11:0],A0_mux,B0_mux};
     endcase
     // Z mux
     case (opmode_mux[3:2])
-       2'b00 : Z_mux = C_mux;
-       2'b01 : Z_mux = P;
-       2'b10 : Z_mux = PCIN;
-       default: Z_mux = 0;
+       2'b00 : Z_mux = 0;
+       2'b01 : Z_mux = PCIN;
+       2'b10 : Z_mux = P_mux;
+       default: Z_mux = C_mux;
     endcase
 end
 
@@ -185,15 +186,16 @@ assign {op3_cout,op3_out} = opmode_mux[7] ? (Z_mux - (X_mux + CYI_mux)) : (Z_mux
 
 
 // ------- Level 4 FFs ------- //
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(CARRYOUTREG),.WIDTH(1)) CYO_REG (.rst(RSTCARRYIN),.clk(CLK),.en(CECARRYIN),.in(op3_cout),.out(CARRYOUT));
-regs #(.RSTTYPE(RSTTYPE),.NUM_REGS(PREG),.WIDTH(48)) P_REG (.rst(RSTP),.clk(CLK),.en(CEP),.in(op3_out),.out(P));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(1)) CYO_REG (.rst(RSTCARRYIN),.clk(CLK),.en(CECARRYIN),.num_reg(CARRYOUTREG),.in(op3_cout),.out(CARRYOUT));
+regs #(.RSTTYPE(RSTTYPE),.WIDTH(48)) P_REG (.rst(RSTP),.clk(CLK),.en(CEP),.num_reg(PREG),.in(op3_out),.out(P_mux));
 
 
 // ------- Outputs ------- //
 assign BCOUT = B1_mux;
 assign M = M_mux;
 assign CARRYOUTF = CARRYOUT;
-assign PCOUT = P;
-
+assign P = P_mux;
+assign PCOUT = P_mux;
 
 endmodule
+
